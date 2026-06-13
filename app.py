@@ -5,6 +5,21 @@ import pandas as pd
 import datetime
 import json
 
+st.markdown("""
+    <style>
+    /* ダークモード/ライトモードを自動検知して色を変える */
+    @media (prefers-color-scheme: dark) {
+        :root { --text-color: #ffffff; --bg-color: #1e1e1e; }
+        h1, h2, h3 { color: #d6a4ff; } /* 暗い背景で映える薄い紫 */
+    }
+    @media (prefers-color-scheme: light) {
+        :root { --text-color: #333333; --bg-color: #fcf9ff; }
+        h1, h2, h3 { color: #6a1b9a; } /* 明るい背景で映える濃い紫 */
+    }
+    .stApp { background-color: var(--bg-color); color: var(--text-color); }
+    </style>
+""", unsafe_allow_html=True)
+
 # 起動時のデータベース初期化
 db.init_db()
 
