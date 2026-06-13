@@ -1,28 +1,30 @@
+# app.py
 import streamlit as st
 import db
 import math
 import pandas as pd
 import datetime
+import json
 
 # 起動時のデータベース初期化
 db.init_db()
 
-# --- UI設定：薄い紫のテーマカラーと全体デザイン ---
+# --- UI設定：薄い紫のテーマカラー ---
 st.markdown("""
     <style>
-    /* 全体の背景色を薄い紫に */
     .stApp { background-color: #fcf9ff; }
-    /* プライマリーボタン（保存ボタン等）の色を紫に */
     div.stButton > button:first-child { background-color: #9b59b6; color: white; border: none; }
     div.stButton > button:first-child:hover { background-color: #8e44ad; color: white; }
-    /* 見出しの色を濃い紫に */
     h1, h2, h3 { color: #6a1b9a; }
     </style>
 """, unsafe_allow_html=True)
 
 st.set_page_config(page_title="原価計算・丁付け管理システム", layout="wide")
 
-# --- セッション管理（ページ移動しても入力値を保持する仕組み） ---
+# インク使用量の選択肢マッピング
+INK_DISPLAY_OPTS = ["なし", "レベル1（極小）", "レベル2（小）", "レベル3（中）", "レベル4（大）", "レベル5（特大）"]
+
+# セッション管理（ページ切り替えしても数値を完全に保持する仕組み）
 if 'order_data' not in st.session_state:
     st.session_state.order_data = {
         i: {
@@ -32,19 +34,15 @@ if 'order_data' not in st.session_state:
         } for i in range(1, 11)
     }
 
-# --- サイドバー ---
 st.sidebar.title("メニュー")
 page = st.sidebar.radio("ページ移動", ["データ入力（マスタ設定）", "データ出力（原価計算）", "データまとめ", "とり（丁付け）確認"])
 
-# --- ヘルパー関数 ---
 def get_num(d, key, default=0.0):
     try: return float(d.get(key, default))
     except (ValueError, TypeError): return float(default)
 
 def format_time(seconds):
-    h = int(seconds // 3600)
-    m = int((seconds % 3600) // 60)
-    s = int(seconds % 60)
+    h = int(seconds // 3600); m = int((seconds % 3600) // 60); s = int(seconds % 60)
     return f"{h}時間{m}分{s}秒"
 
 # ==========================================
@@ -52,24 +50,18 @@ def format_time(seconds):
 # ==========================================
 if page == "データ入力（マスタ設定）":
     st.title("⚙️ データ入力（マスタ設定）")
-    
-    # パターン選択
-    pattern_id = st.selectbox("📂 読み込む/保存する設定パターンを選択", [1, 2, 3, 4, 5], format_func=lambda x: f"パターン {x}")
+    pattern_id = st.selectbox("📂 設定パターンを選択", [1, 2, 3, 4, 5], format_func=lambda x: f"パターン {x}")
     s = db.get_settings(pattern_id)
     
-    # 保存ボタンのUI（上下に配置するために関数化）
     def save_settings_ui(position=""):
         if st.form_submit_button(f"💾 パターン {pattern_id} に設定を保存する {position}"):
             for key in st.session_state.keys():
-                # 現在のパターンのキー（例: _p1）がついているものだけをDBに保存
                 if key.endswith(f"_p{pattern_id}"):
-                    base_key = key.replace(f"_p{pattern_id}", "")
-                    db.update_setting(pattern_id, base_key, st.session_state[key])
+                    db.update_setting(pattern_id, key.replace(f"_p{pattern_id}", ""), st.session_state[key])
             st.success(f"パターン {pattern_id} の設定を保存しました！")
 
     with st.form("settings_form"):
-        save_settings_ui("(上部)") # 上部の保存ボタン
-        
+        save_settings_ui("(上部)")
         tab1, tab2, tab3, tab4 = st.tabs(["① 素材・時間・機械代", "② インク設定", "③ 梱包・袋詰め", "④ 利益率・ロスト率"])
         
         with tab1:
@@ -103,10 +95,10 @@ if page == "データ入力（マスタ設定）":
                 st.markdown("##### 追加インク (1回あたり)")
                 st.number_input("マット 追加原価 (円)", value=get_num(s, 'ink_mat_cost'), key=f"ink_mat_cost_p{pattern_id}")
                 st.number_input("マット 追加時間 (秒)", value=get_num(s, 'ink_mat_sec'), key=f"ink_mat_sec_p{pattern_id}")
-                st.number_input("透明 追加原価 (円)", value=get_num(s, 'ink_clr_cost'), key=f"ink_clr_cost_p{pattern_id}")
-                st.number_input("透明 追加時間 (秒)", value=get_num(s, 'ink_clr_sec'), key=f"ink_clr_sec_p{pattern_id}")
-                st.number_input("白版 追加原価 (円)", value=get_num(s, 'ink_wht_cost'), key=f"ink_wht_cost_p{pattern_id}")
-                st.number_input("白版 追加時間 (秒)", value=get_num(s, 'ink_wht_sec'), key=f"ink_wht_sec_p{pattern_id}")
+                st.number_input("透明追加 追加原価 (円)", value=get_num(s, 'ink_clr_cost'), key=f"ink_clr_cost_p{pattern_id}")
+                st.number_input("透明追加 追加時間 (秒)", value=get_num(s, 'ink_clr_sec'), key=f"ink_clr_sec_p{pattern_id}")
+                st.number_input("白追加 追加原価 (円)", value=get_num(s, 'ink_wht_cost'), key=f"ink_wht_cost_p{pattern_id}")
+                st.number_input("白追加 追加時間 (秒)", value=get_num(s, 'ink_wht_sec'), key=f"ink_wht_sec_p{pattern_id}")
 
         with tab3:
             st.markdown("##### 梱包・袋詰め・アセンブリ (最大10項目)")
@@ -128,19 +120,15 @@ if page == "データ入力（マスタ設定）":
                     st.number_input(f"ロスト率 {i}", value=get_num(s, f'loss_{i}'), key=f"loss_{i}_p{pattern_id}")
 
         st.divider()
-        save_settings_ui("(下部)") # 下部の保存ボタン
+        save_settings_ui("(下部)")
 
 # ==========================================
 # ページ2：データ出力（原価計算）
 # ==========================================
 elif page == "データ出力（原価計算）":
     st.title("📊 データ出力（原価計算）")
-    
-    # 計算のベースにするマスタパターンを選択
     calc_pattern = st.selectbox("📄 適用するマスタ設定パターン", [1, 2, 3, 4, 5], format_func=lambda x: f"パターン {x} の設定で計算")
     s = db.get_settings(calc_pattern)
-    
-    # 梱包オプションの選択肢を作成（名前が設定されているものだけ）
     pack_opts = {f"{i}: {s.get(f'pack_{i}_name')}": i for i in range(1, 11) if s.get(f'pack_{i}_name')}
 
     tabs = st.tabs([f"Order {i}" for i in range(1, 11)])
@@ -149,7 +137,6 @@ elif page == "データ出力（原価計算）":
         i = idx + 1
         with tab:
             st.subheader(f"Order {i}")
-            # d はページをまたいでも保持される辞書
             d = st.session_state.order_data[i]
             
             c1, c2 = st.columns([1, 2])
@@ -158,29 +145,34 @@ elif page == "データ出力（原価計算）":
                 d['tori'] = st.number_input("1シート丁付け数", min_value=1, value=d['tori'], key=f"tori_{i}")
                 d['mat'] = st.selectbox("素材・サイズ", ["アクリル A4", "アクリル A3", "MDF A4", "MDF A3"], index=["アクリル A4", "アクリル A3", "MDF A4", "MDF A3"].index(d['mat']), key=f"mat_{i}")
                 
-                # インクと追加オプション
-                ink_options = ["なし", "1", "2", "3", "4", "5"]
-                d['ink'] = st.selectbox("インク使用量", ink_options, index=ink_options.index(d['ink']), key=f"ink_{i}")
+                # 💡修正ポイント：インク使用量を分かりやすい表記に変更
+                if d['ink'] not in INK_DISPLAY_OPTS: d['ink'] = "なし"
+                d['ink'] = st.selectbox("インク使用量", INK_DISPLAY_OPTS, index=INK_DISPLAY_OPTS.index(d['ink']), key=f"ink_{i}")
+                
+                # 💡修正ポイント：「白版」➔「白」へ名称変更
                 d['mat_c'] = st.number_input("マット追加(回)", min_value=0, value=d['mat_c'], key=f"mat_c_{i}")
                 d['clr_c'] = st.number_input("透明追加(回)", min_value=0, value=d['clr_c'], key=f"clr_c_{i}")
-                d['wht_c'] = st.number_input("白版追加(回)", min_value=0, value=d['wht_c'], key=f"wht_c_{i}")
+                d['wht_c'] = st.number_input("白追加(回)", min_value=0, value=d['wht_c'], key=f"wht_c_{i}")
                 
-                # 梱包オプション（パターンの切り替え等で無効なキーが入るのを防ぐ）
                 valid_packs = [p for p in d['packs'] if p in pack_opts.keys()]
                 d['packs'] = st.multiselect("袋詰め・梱包（複数可）", list(pack_opts.keys()), default=valid_packs, key=f"packs_{i}")
                 
-                # 利益・ロスト率
                 d['loss_opt'] = st.selectbox("ロスト率", [1, 2, 3], index=d['loss_opt']-1, format_func=lambda x: f"設定{x} ({get_num(s, f'loss_{x}')}%)", key=f"loss_{i}")
                 d['prof_opt'] = st.selectbox("利益率", [1, 2, 3], index=d['prof_opt']-1, format_func=lambda x: f"設定{x} ({get_num(s, f'profit_{x}')}%)", key=f"prof_{i}")
 
             with c2:
-                # --- 計算ロジック ---
+                # 文字列からインクレベルの数値を抽出して計算
+                if d['ink'] == "なし":
+                    ink_cost = 0
+                else:
+                    lvl_num = d['ink'].split("レベル")[1][0] # "レベル1（少）" -> "1"
+                    ink_cost = get_num(s, f"ink_{lvl_num}")
+
                 ms_key = "ac_a4" if d['mat'] == "アクリル A4" else "ac_a3" if d['mat'] == "アクリル A3" else "mdf_a4" if d['mat'] == "MDF A4" else "mdf_a3"
                 base_cost = get_num(s, f"{ms_key}_cost")
                 base_sec = get_num(s, f"{ms_key}_sec")
                 base_mac = get_num(s, f"{ms_key}_mac")
 
-                ink_cost = 0 if d['ink'] == "なし" else get_num(s, f"ink_{d['ink']}")
                 ext_ink_cost = d['mat_c'] * get_num(s, 'ink_mat_cost') + d['clr_c'] * get_num(s, 'ink_clr_cost') + d['wht_c'] * get_num(s, 'ink_wht_cost')
                 ext_ink_sec = d['mat_c'] * get_num(s, 'ink_mat_sec') + d['clr_c'] * get_num(s, 'ink_clr_sec') + d['wht_c'] * get_num(s, 'ink_wht_sec')
                 
@@ -206,14 +198,8 @@ elif page == "データ出力（原価計算）":
                 total_sale = unit_sale * d['qty']
                 total_profit = unit_profit * d['qty']
 
-                # 計算結果を辞書に保存（まとめページで使うため）
-                d['req_sheets'] = req_sheets
-                d['unit_cost'] = unit_cost
-                d['unit_sale'] = unit_sale
-                d['total_cost'] = total_cost
-                d['total_sale'] = total_sale
-                d['total_profit'] = total_profit
-                d['total_sec'] = total_sec
+                d['req_sheets'] = req_sheets; d['unit_cost'] = unit_cost; d['unit_sale'] = unit_sale
+                d['total_cost'] = total_cost; d['total_sale'] = total_sale; d['total_profit'] = total_profit; d['total_sec'] = total_sec
 
                 st.markdown("### 📝 算出結果")
                 st.write(f"**必要シート数:** {req_sheets} シート (ロスト率 {loss_rate}% 込み)")
@@ -223,30 +209,54 @@ elif page == "データ出力（原価計算）":
                 st.info(f"**総原価: {total_cost:.0f}円 / 総売上: {total_sale:.0f}円 / 総利益: {total_profit:.0f}円**")
 
 # ==========================================
-# ページ3：データまとめ・出力
+# ページ3：データまとめ
 # ==========================================
 elif page == "データまとめ":
     st.title("📋 データまとめ")
     
-    # qty(製造予定個数)が0より大きいOrderだけを抽出
+    # 💡修正ポイント：案件状態の10セット保存・読み込みUIを追加
+    st.subheader("💾 見積もりパターンの保存・読み込み (最大10セット)")
+    templates = db.get_order_templates()
+    template_options = [f"{t[0]}: {t[1]}" for t in templates]
+    
+    col_load, col_save = st.columns(2)
+    with col_load:
+        selected_load = st.selectbox("📥 読み込む保存枠を選択", template_options, key="load_tpl_sel")
+        if st.button("パターンを読み込む"):
+            t_id = int(selected_load.split(":")[0])
+            data_str = db.load_order_template(t_id)
+            if data_str:
+                st.session_state.order_data = json.loads(data_str)
+                st.success("保存データを読み込みました！")
+                st.rerun()
+            else:
+                st.error("この枠にはまだ見積もりデータが保存されていません。")
+                
+    with col_save:
+        selected_save = st.selectbox("💾 保存する枠を選択", template_options, key="save_tpl_sel")
+        new_name = st.text_input("保存するパターンの名前を入力", value="見積もりデータ")
+        if st.button("現在の入力中身を保存する"):
+            t_id = int(selected_save.split(":")[0])
+            data_str = json.dumps(st.session_state.order_data)
+            db.save_order_template(t_id, new_name, data_str)
+            st.success(f"枠 {t_id} に「{new_name}」として保存しました！")
+            st.rerun()
+
+    st.divider()
+
     valid_data = []
     for i in range(1, 11):
         d = st.session_state.order_data[i]
         if d['qty'] > 0:
             valid_data.append({
-                "Order": f"Order {i}",
-                "予定個数": d['qty'],
-                "必要シート数": d['req_sheets'],
-                "1個原価": round(d['unit_cost'], 2),
-                "1個売価": round(d['unit_sale'], 2),
-                "総原価": round(d['total_cost'], 0),
-                "総売上": round(d['total_sale'], 0),
-                "総利益": round(d['total_profit'], 0),
+                "Order": f"Order {i}", "予定個数": d['qty'], "必要シート数": d['req_sheets'],
+                "1個原価": round(d['unit_cost'], 2), "1個売価": round(d['unit_sale'], 2),
+                "総原価": round(d['total_cost'], 0), "総売上": round(d['total_sale'], 0), "総利益": round(d['total_profit'], 0),
                 "総時間": d['total_sec']
             })
     
     if not valid_data:
-        st.warning("データ出力ページで製造個数を1以上入力してください。（数量0のOrderは表示・出力されません）")
+        st.warning("データ出力ページで製造個数を1以上入力してください。数量0のOrderは除外されます。")
     else:
         df = pd.DataFrame(valid_data)
         total_qty = df["予定個数"].sum()
@@ -262,13 +272,9 @@ elif page == "データまとめ":
         c4.metric("総合計 利益", f"{total_profit:,.0f} 円")
         st.write(f"**全Order 総製造時間:** {format_time(total_sec)}")
         
-        # --- CSV出力用のデータ整形（縦横の入れ替え） ---
-        df_csv = df.copy()
-        df_csv["総時間"] = df_csv["総時間"].apply(format_time)
-        df_csv.set_index("Order", inplace=True)
-        df_t = df_csv.T # 転置
+        df_csv = df.copy(); df_csv["総時間"] = df_csv["総時間"].apply(format_time)
+        df_csv.set_index("Order", inplace=True); df_t = df_csv.T
         
-        # エラー修正：総計の数値を文字（文字列）に変換してから代入
         df_t.insert(0, "総合計 (Grand Total)", "")
         df_t.at["予定個数", "総合計 (Grand Total)"] = str(int(total_qty))
         df_t.at["必要シート数", "総合計 (Grand Total)"] = str(int(df["必要シート数"].sum()))
@@ -278,29 +284,30 @@ elif page == "データまとめ":
         df_t.at["総売上", "総合計 (Grand Total)"] = str(int(total_sale))
         df_t.at["総利益", "総合計 (Grand Total)"] = str(int(total_profit))
         df_t.at["総時間", "総合計 (Grand Total)"] = format_time(total_sec)
-
-        df_t.reset_index(inplace=True)
-        df_t.rename(columns={"index": "項目"}, inplace=True)
+        df_t.reset_index(inplace=True); df_t.rename(columns={"index": "項目"}, inplace=True)
         
         st.divider()
         st.write("▼ CSV出力プレビュー")
         st.dataframe(df_t, use_container_width=True)
         
-        # utf-8-sig でExcelの文字化け防止
         csv = df_t.to_csv(index=False, encoding='utf-8-sig')
         st.download_button(label="📥 見積もりデータ(CSV)をダウンロード", data=csv, file_name='cost_estimate.csv', mime='text/csv')
 
         st.divider()
         
-        # --- 見積書（PDF）作成機能 ---
+        # 💡修正ポイント：全体が印刷されないよう、見積書部分だけをポップアップで切り出すJavaScript印刷を実装
         st.subheader("📑 見積書の作成（PDF保存）")
-        st.info("💡 以下の枠内で **右クリック ➔ 「印刷」** （または Ctrl+P / Cmd+P）を押し、送信先を「PDFに保存」にすると綺麗な見積書が作成できます。")
+        st.info("💡 下の見積書枠内にある「この見積書だけを印刷・PDF保存」ボタンを押すと、周りのメニューを巻き込まずに綺麗にPDF化できます。")
         
         today_str = datetime.date.today().strftime('%Y年%m月%d日')
         
         html_text = f"""
-        <div style="font-family: sans-serif; padding: 20px; border: 1px solid #ccc; max-width: 800px; margin: auto; background-color: white;">
-            <h2 style="text-align: center; letter-spacing: 5px; color: #333;">御見積書</h2>
+        <div style="background-color: #eee; padding: 10px; text-align: center;">
+            <button onclick="printInvoice()" style="background-color: #9b59b6; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold;">🖨️ この見積書だけを印刷・PDF保存</button>
+        </div>
+        
+        <div id="invoice-area" style="font-family: sans-serif; padding: 40px; max-width: 800px; margin: auto; background-color: white;">
+            <h2 style="text-align: center; letter-spacing: 5px; color: #333; margin-bottom: 30px;">御見積書</h2>
             <p style="text-align: right; color: #333;">発行日: {today_str}</p>
             <p style="font-size: 1.2em; border-bottom: 1px solid #000; width: 50%; padding-bottom: 5px; color: #333;"><strong> 御中</strong></p>
             <p style="margin-top: 20px; color: #333;">下記の通り御見積申し上げます。</p>
@@ -329,12 +336,21 @@ elif page == "データまとめ":
                 ※本見積もりの有効期限は発行日より30日とさせていただきます。
             </div>
         </div>
+        
+        <script>
+        function printInvoice() {
+            var printContents = document.getElementById('invoice-area').innerHTML;
+            var popupWin = window.open('', '_blank', 'width=900,height=800');
+            popupWin.document.open();
+            popupWin.document.write('<html><head><title>御見積書</title><style>body{font-family:sans-serif;padding:30px;} table{width:100%;border-collapse:collapse;margin-top:30px;} th,td{border-bottom:1px solid #ccc;padding:10px;} th{background-color:#f2f2f2;} @media print{button{display:none;}}</style></head><body onload="window.print();window.close()">' + printContents + '</body></html>');
+            popupWin.document.close();
+        }
+        </script>
         """
-        st.components.v1.html(html_text, height=600, scrolling=True)
+        st.components.v1.html(html_text, height=750, scrolling=True)
 
     st.divider()
     if st.button("🗑️ 全Orderの入力データをクリアする"):
-        # セッションの初期化（数量も0に戻す）
         st.session_state.order_data = {
             i: {
                 'qty': 0, 'tori': 15, 'mat': "アクリル A4", 'ink': "なし",
