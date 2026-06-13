@@ -1,4 +1,3 @@
-# app.py
 import streamlit as st
 import db
 import math
@@ -9,7 +8,7 @@ import json
 # 起動時のデータベース初期化
 db.init_db()
 
-# --- UI設定：薄い紫のテーマカラー ---
+# --- UI設定：薄い紫のテーマカラーと全体デザイン ---
 st.markdown("""
     <style>
     .stApp { background-color: #fcf9ff; }
@@ -21,8 +20,8 @@ st.markdown("""
 
 st.set_page_config(page_title="原価計算・丁付け管理システム", layout="wide")
 
-# インク使用量の選択肢マッピング
-INK_DISPLAY_OPTS = ["なし", "レベル1（極小）", "レベル2（小）", "レベル3（中）", "レベル4（大）", "レベル5（特大）"]
+# インク使用量の選択肢マッピング（直感的な名称へ変更）
+INK_DISPLAY_OPTS = ["なし", "レベル1（少）", "レベル2", "レベル3（中）", "レベル4", "レベル5（多）"]
 
 # セッション管理（ページ切り替えしても数値を完全に保持する仕組み）
 if 'order_data' not in st.session_state:
@@ -42,7 +41,9 @@ def get_num(d, key, default=0.0):
     except (ValueError, TypeError): return float(default)
 
 def format_time(seconds):
-    h = int(seconds // 3600); m = int((seconds % 3600) // 60); s = int(seconds % 60)
+    h = int(seconds // 3600)
+    m = int((seconds % 3600) // 60)
+    s = int(seconds % 60)
     return f"{h}時間{m}分{s}秒"
 
 # ==========================================
@@ -145,11 +146,10 @@ elif page == "データ出力（原価計算）":
                 d['tori'] = st.number_input("1シート丁付け数", min_value=1, value=d['tori'], key=f"tori_{i}")
                 d['mat'] = st.selectbox("素材・サイズ", ["アクリル A4", "アクリル A3", "MDF A4", "MDF A3"], index=["アクリル A4", "アクリル A3", "MDF A4", "MDF A3"].index(d['mat']), key=f"mat_{i}")
                 
-                # 💡修正ポイント：インク使用量を分かりやすい表記に変更
+                # インク使用量を分かりやすい表記に変更
                 if d['ink'] not in INK_DISPLAY_OPTS: d['ink'] = "なし"
                 d['ink'] = st.selectbox("インク使用量", INK_DISPLAY_OPTS, index=INK_DISPLAY_OPTS.index(d['ink']), key=f"ink_{i}")
                 
-                # 💡修正ポイント：「白版」➔「白」へ名称変更
                 d['mat_c'] = st.number_input("マット追加(回)", min_value=0, value=d['mat_c'], key=f"mat_c_{i}")
                 d['clr_c'] = st.number_input("透明追加(回)", min_value=0, value=d['clr_c'], key=f"clr_c_{i}")
                 d['wht_c'] = st.number_input("白追加(回)", min_value=0, value=d['wht_c'], key=f"wht_c_{i}")
@@ -165,7 +165,7 @@ elif page == "データ出力（原価計算）":
                 if d['ink'] == "なし":
                     ink_cost = 0
                 else:
-                    lvl_num = d['ink'].split("レベル")[1][0] # "レベル1（少）" -> "1"
+                    lvl_num = d['ink'].split("レベル")[1][0] # "レベル1（少）" -> "1" を抽出
                     ink_cost = get_num(s, f"ink_{lvl_num}")
 
                 ms_key = "ac_a4" if d['mat'] == "アクリル A4" else "ac_a3" if d['mat'] == "アクリル A3" else "mdf_a4" if d['mat'] == "MDF A4" else "mdf_a3"
@@ -214,7 +214,6 @@ elif page == "データ出力（原価計算）":
 elif page == "データまとめ":
     st.title("📋 データまとめ")
     
-    # 💡修正ポイント：案件状態の10セット保存・読み込みUIを追加
     st.subheader("💾 見積もりパターンの保存・読み込み (最大10セット)")
     templates = db.get_order_templates()
     template_options = [f"{t[0]}: {t[1]}" for t in templates]
@@ -226,7 +225,9 @@ elif page == "データまとめ":
             t_id = int(selected_load.split(":")[0])
             data_str = db.load_order_template(t_id)
             if data_str:
-                st.session_state.order_data = json.loads(data_str)
+                loaded_data = json.loads(data_str)
+                # 💡【エラー修正箇所】JSONで文字("1")になってしまったキーを、確実に数字(1)へ変換して戻す
+                st.session_state.order_data = {int(k): v for k, v in loaded_data.items()}
                 st.success("保存データを読み込みました！")
                 st.rerun()
             else:
@@ -295,7 +296,6 @@ elif page == "データまとめ":
 
         st.divider()
         
-        # 💡修正ポイント：全体が印刷されないよう、見積書部分だけをポップアップで切り出すJavaScript印刷を実装
         st.subheader("📑 見積書の作成（PDF保存）")
         st.info("💡 下の見積書枠内にある「この見積書だけを印刷・PDF保存」ボタンを押すと、周りのメニューを巻き込まずに綺麗にPDF化できます。")
         
