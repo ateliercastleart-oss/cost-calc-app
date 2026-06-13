@@ -20,7 +20,7 @@ st.markdown("""
 
 st.set_page_config(page_title="原価計算・丁付け管理システム", layout="wide")
 
-# インク使用量の選択肢マッピング（直感的な名称へ変更）
+# インク使用量の選択肢マッピング
 INK_DISPLAY_OPTS = ["なし", "レベル1（少）", "レベル2", "レベル3（中）", "レベル4", "レベル5（多）"]
 
 # セッション管理（ページ切り替えしても数値を完全に保持する仕組み）
@@ -40,28 +40,45 @@ def get_num(d, key, default=0.0):
     try: return float(d.get(key, default))
     except (ValueError, TypeError): return float(default)
 
+# 画面表示用の日本語時間フォーマット
 def format_time(seconds):
-    h = int(seconds // 3600)
-    m = int((seconds % 3600) // 60)
-    s = int(seconds % 60)
+    h = int(seconds // 3600); m = int((seconds % 3600) // 60); s = int(seconds % 60)
     return f"{h}時間{m}分{s}秒"
+
+# 💡新規追加：CSV出力用の英語時間フォーマット
+def format_time_en(seconds):
+    h = int(seconds // 3600); m = int((seconds % 3600) // 60); s = int(seconds % 60)
+    return f"{h}h {m}m {s}s"
+
+def get_pattern_dict():
+    p_names = {}
+    for p in range(1, 6):
+        s = db.get_settings(p)
+        name = s.get('pattern_name', '')
+        p_names[p] = name if name else f"パターン {p}"
+    return p_names
 
 # ==========================================
 # ページ1：データ入力（マスタ設定）
 # ==========================================
 if page == "データ入力（マスタ設定）":
     st.title("⚙️ データ入力（マスタ設定）")
-    pattern_id = st.selectbox("📂 設定パターンを選択", [1, 2, 3, 4, 5], format_func=lambda x: f"パターン {x}")
+    
+    p_names = get_pattern_dict()
+    pattern_id = st.selectbox("📂 読み込む/保存する設定パターンを選択", [1, 2, 3, 4, 5], format_func=lambda x: f"{x}: {p_names[x]}")
     s = db.get_settings(pattern_id)
     
     def save_settings_ui(position=""):
-        if st.form_submit_button(f"💾 パターン {pattern_id} に設定を保存する {position}"):
+        if st.form_submit_button(f"💾 「{p_names[pattern_id]}」に設定を保存する {position}"):
             for key in st.session_state.keys():
                 if key.endswith(f"_p{pattern_id}"):
                     db.update_setting(pattern_id, key.replace(f"_p{pattern_id}", ""), st.session_state[key])
-            st.success(f"パターン {pattern_id} の設定を保存しました！")
+            st.success(f"「{st.session_state[f'pattern_name_p{pattern_id}']}」として設定を保存しました！")
+            st.rerun()
 
     with st.form("settings_form"):
+        st.text_input("📝 このパターンの名前（任意）", value=s.get('pattern_name', ''), key=f"pattern_name_p{pattern_id}", placeholder="例：基本設定、大口案件用 など")
+        
         save_settings_ui("(上部)")
         tab1, tab2, tab3, tab4 = st.tabs(["① 素材・時間・機械代", "② インク設定", "③ 梱包・袋詰め", "④ 利益率・ロスト率"])
         
@@ -128,7 +145,9 @@ if page == "データ入力（マスタ設定）":
 # ==========================================
 elif page == "データ出力（原価計算）":
     st.title("📊 データ出力（原価計算）")
-    calc_pattern = st.selectbox("📄 適用するマスタ設定パターン", [1, 2, 3, 4, 5], format_func=lambda x: f"パターン {x} の設定で計算")
+    
+    p_names = get_pattern_dict()
+    calc_pattern = st.selectbox("📄 適用するマスタ設定パターン", [1, 2, 3, 4, 5], format_func=lambda x: f"{x}: {p_names[x]}")
     s = db.get_settings(calc_pattern)
     pack_opts = {f"{i}: {s.get(f'pack_{i}_name')}": i for i in range(1, 11) if s.get(f'pack_{i}_name')}
 
@@ -146,7 +165,6 @@ elif page == "データ出力（原価計算）":
                 d['tori'] = st.number_input("1シート丁付け数", min_value=1, value=d['tori'], key=f"tori_{i}")
                 d['mat'] = st.selectbox("素材・サイズ", ["アクリル A4", "アクリル A3", "MDF A4", "MDF A3"], index=["アクリル A4", "アクリル A3", "MDF A4", "MDF A3"].index(d['mat']), key=f"mat_{i}")
                 
-                # インク使用量を分かりやすい表記に変更
                 if d['ink'] not in INK_DISPLAY_OPTS: d['ink'] = "なし"
                 d['ink'] = st.selectbox("インク使用量", INK_DISPLAY_OPTS, index=INK_DISPLAY_OPTS.index(d['ink']), key=f"ink_{i}")
                 
@@ -161,11 +179,10 @@ elif page == "データ出力（原価計算）":
                 d['prof_opt'] = st.selectbox("利益率", [1, 2, 3], index=d['prof_opt']-1, format_func=lambda x: f"設定{x} ({get_num(s, f'profit_{x}')}%)", key=f"prof_{i}")
 
             with c2:
-                # 文字列からインクレベルの数値を抽出して計算
                 if d['ink'] == "なし":
                     ink_cost = 0
                 else:
-                    lvl_num = d['ink'].split("レベル")[1][0] # "レベル1（少）" -> "1" を抽出
+                    lvl_num = d['ink'].split("レベル")[1][0]
                     ink_cost = get_num(s, f"ink_{lvl_num}")
 
                 ms_key = "ac_a4" if d['mat'] == "アクリル A4" else "ac_a3" if d['mat'] == "アクリル A3" else "mdf_a4" if d['mat'] == "MDF A4" else "mdf_a3"
@@ -226,7 +243,6 @@ elif page == "データまとめ":
             data_str = db.load_order_template(t_id)
             if data_str:
                 loaded_data = json.loads(data_str)
-                # 💡【エラー修正箇所】JSONで文字("1")になってしまったキーを、確実に数字(1)へ変換して戻す
                 st.session_state.order_data = {int(k): v for k, v in loaded_data.items()}
                 st.success("保存データを読み込みました！")
                 st.rerun()
@@ -273,26 +289,53 @@ elif page == "データまとめ":
         c4.metric("総合計 利益", f"{total_profit:,.0f} 円")
         st.write(f"**全Order 総製造時間:** {format_time(total_sec)}")
         
-        df_csv = df.copy(); df_csv["総時間"] = df_csv["総時間"].apply(format_time)
-        df_csv.set_index("Order", inplace=True); df_t = df_csv.T
+        # --- 画面表示用データ（日本語） ---
+        df_disp = df.copy(); df_disp["総時間"] = df_disp["総時間"].apply(format_time)
+        df_disp.set_index("Order", inplace=True); df_disp_t = df_disp.T
         
-        df_t.insert(0, "総合計 (Grand Total)", "")
-        df_t.at["予定個数", "総合計 (Grand Total)"] = str(int(total_qty))
-        df_t.at["必要シート数", "総合計 (Grand Total)"] = str(int(df["必要シート数"].sum()))
-        df_t.at["1個原価", "総合計 (Grand Total)"] = "-"
-        df_t.at["1個売価", "総合計 (Grand Total)"] = "-"
-        df_t.at["総原価", "総合計 (Grand Total)"] = str(int(total_cost))
-        df_t.at["総売上", "総合計 (Grand Total)"] = str(int(total_sale))
-        df_t.at["総利益", "総合計 (Grand Total)"] = str(int(total_profit))
-        df_t.at["総時間", "総合計 (Grand Total)"] = format_time(total_sec)
-        df_t.reset_index(inplace=True); df_t.rename(columns={"index": "項目"}, inplace=True)
+        df_disp_t.insert(0, "総合計 (Grand Total)", "")
+        df_disp_t.at["予定個数", "総合計 (Grand Total)"] = str(int(total_qty))
+        df_disp_t.at["必要シート数", "総合計 (Grand Total)"] = str(int(df["必要シート数"].sum()))
+        df_disp_t.at["1個原価", "総合計 (Grand Total)"] = "-"
+        df_disp_t.at["1個売価", "総合計 (Grand Total)"] = "-"
+        df_disp_t.at["総原価", "総合計 (Grand Total)"] = str(int(total_cost))
+        df_disp_t.at["総売上", "総合計 (Grand Total)"] = str(int(total_sale))
+        df_disp_t.at["総利益", "総合計 (Grand Total)"] = str(int(total_profit))
+        df_disp_t.at["総時間", "総合計 (Grand Total)"] = format_time(total_sec)
+        df_disp_t.reset_index(inplace=True); df_disp_t.rename(columns={"index": "項目"}, inplace=True)
         
         st.divider()
-        st.write("▼ CSV出力プレビュー")
-        st.dataframe(df_t, use_container_width=True)
+        st.write("▼ データまとめプレビュー（※ダウンロードされるCSVは文字化け防止のため完全に英語表記になります）")
+        st.dataframe(df_disp_t, use_container_width=True)
         
-        csv = df_t.to_csv(index=False, encoding='utf-8-sig')
-        st.download_button(label="📥 見積もりデータ(CSV)をダウンロード", data=csv, file_name='cost_estimate.csv', mime='text/csv')
+        # 💡新規追加：CSVダウンロード用データ（完全英語化・ローマ字化）
+        csv_mapping = {
+            "予定個数": "Qty", "必要シート数": "Req_Sheets", 
+            "1個原価": "Unit_Cost", "1個売価": "Unit_Price",
+            "総原価": "Total_Cost", "総売上": "Total_Sales", 
+            "総利益": "Total_Profit", "総時間": "Total_Time"
+        }
+        df_csv = df.copy()
+        df_csv["総時間"] = df_csv["総時間"].apply(format_time_en)
+        df_csv.rename(columns=csv_mapping, inplace=True)
+        df_csv.set_index("Order", inplace=True)
+        df_t = df_csv.T
+        
+        df_t.insert(0, "Grand_Total", "")
+        df_t.at["Qty", "Grand_Total"] = str(int(total_qty))
+        df_t.at["Req_Sheets", "Grand_Total"] = str(int(df["必要シート数"].sum()))
+        df_t.at["Unit_Cost", "Grand_Total"] = "-"
+        df_t.at["Unit_Price", "Grand_Total"] = "-"
+        df_t.at["Total_Cost", "Grand_Total"] = str(int(total_cost))
+        df_t.at["Total_Sales", "Grand_Total"] = str(int(total_sale))
+        df_t.at["Total_Profit", "Grand_Total"] = str(int(total_profit))
+        df_t.at["Total_Time", "Grand_Total"] = format_time_en(total_sec)
+        
+        df_t.reset_index(inplace=True); df_t.rename(columns={"index": "Item"}, inplace=True)
+        
+        # 日本語が一切含まれていないため、通常のutf-8でエンコード（どんな環境でも絶対文字化けしません）
+        csv = df_t.to_csv(index=False, encoding='utf-8')
+        st.download_button(label="📥 見積もりデータ(CSV/英語)をダウンロード", data=csv, file_name='cost_estimate.csv', mime='text/csv')
 
         st.divider()
         

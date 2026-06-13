@@ -1,4 +1,3 @@
-# db.py
 import sqlite3
 import pandas as pd
 
@@ -7,7 +6,6 @@ DB_NAME = 'cost.db'
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    # マスタ設定テーブル
     c.execute('''
         CREATE TABLE IF NOT EXISTS settings (
             pattern_id INTEGER,
@@ -16,7 +14,6 @@ def init_db():
             PRIMARY KEY (pattern_id, item_key)
         )
     ''')
-    # 💡新規追加：案件の入力内容（Order1~10）を10セット保存するテーブル
     c.execute('''
         CREATE TABLE IF NOT EXISTS order_templates (
             template_id INTEGER PRIMARY KEY,
@@ -25,8 +22,8 @@ def init_db():
         )
     ''')
     
-    # パターン1〜5の初期データ
     default_settings = {
+        'pattern_name': '', # パターンの名前用
         'ac_a4_cost': '500', 'ac_a4_sec': '300', 'ac_a4_mac': '10',
         'ac_a3_cost': '1000', 'ac_a3_sec': '600', 'ac_a3_mac': '20',
         'mdf_a4_cost': '300', 'mdf_a4_sec': '240', 'mdf_a4_mac': '10',
@@ -48,7 +45,6 @@ def init_db():
             c.execute("INSERT OR IGNORE INTO settings (pattern_id, item_key, item_value) VALUES (?, ?, ?)",
                       (p_id, key, val))
             
-    # 💡保存枠1〜10を初期化（まだデータがない状態）
     for t_id in range(1, 11):
         c.execute("INSERT OR IGNORE INTO order_templates (template_id, template_name, template_data) VALUES (?, ?, ?)",
                   (t_id, f"保存枠 {t_id} (未保存)", ""))
@@ -67,12 +63,12 @@ def get_settings(pattern_id):
 def update_setting(pattern_id, item_key, new_value):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("UPDATE settings SET item_value = ? WHERE pattern_id = ? AND item_key = ?", 
-              (str(new_value), pattern_id, item_key))
+    # 💡修正ポイント：INSERT OR REPLACE にすることで、後から追加された項目（パターンの名前など）も確実に保存できるようにしました
+    c.execute("INSERT OR REPLACE INTO settings (pattern_id, item_key, item_value) VALUES (?, ?, ?)", 
+              (pattern_id, item_key, str(new_value)))
     conn.commit()
     conn.close()
 
-# 💡新規追加：テンプレート枠一覧の取得
 def get_order_templates():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -81,7 +77,6 @@ def get_order_templates():
     conn.close()
     return rows
 
-# 💡新規追加：現在の案件内容（JSON文字列）を保存
 def save_order_template(template_id, name, data_str):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -90,7 +85,6 @@ def save_order_template(template_id, name, data_str):
     conn.commit()
     conn.close()
 
-# 💡新規追加：保存されたデータ文字列を読み込み
 def load_order_template(template_id):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
