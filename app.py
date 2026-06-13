@@ -31,6 +31,10 @@ if page == "データ入力（マスタ設定）":
     pattern_id = st.selectbox("📂 読み込む/保存する設定パターンを選択", [1, 2, 3, 4, 5], format_func=lambda x: f"パターン {x}")
     s = db.get_settings(pattern_id)
 
+    # 💡修正ポイント1: Streamlitのキャッシュ罠を回避するため、
+    # パターンごとに異なるキー（_p1 など）を動的に割り当てて常にDBの値を強制表示させます。
+    def gk(base): return f"{base}_p{pattern_id}"
+
     with st.form("settings_form"):
         tab1, tab2, tab3, tab4 = st.tabs(["① 素材・時間・機械代", "② インク設定", "③ 梱包・袋詰め", "④ 利益率・ロスト率"])
         
@@ -38,57 +42,60 @@ if page == "データ入力（マスタ設定）":
             c1, c2 = st.columns(2)
             with c1:
                 st.markdown("##### アクリル")
-                st.number_input("A4 原価 (円)", value=get_num(s, 'ac_a4_cost'), key="ac_a4_cost")
-                st.number_input("A4 加工時間 (秒)", value=get_num(s, 'ac_a4_sec'), key="ac_a4_sec")
-                st.number_input("A4 機械代 (円)", value=get_num(s, 'ac_a4_mac'), key="ac_a4_mac")
+                st.number_input("A4 原価 (円)", value=get_num(s, 'ac_a4_cost'), key=gk("ac_a4_cost"))
+                st.number_input("A4 加工時間 (秒)", value=get_num(s, 'ac_a4_sec'), key=gk("ac_a4_sec"))
+                st.number_input("A4 機械代 (円)", value=get_num(s, 'ac_a4_mac'), key=gk("ac_a4_mac"))
                 st.divider()
-                st.number_input("A3 原価 (円)", value=get_num(s, 'ac_a3_cost'), key="ac_a3_cost")
-                st.number_input("A3 加工時間 (秒)", value=get_num(s, 'ac_a3_sec'), key="ac_a3_sec")
-                st.number_input("A3 機械代 (円)", value=get_num(s, 'ac_a3_mac'), key="ac_a3_mac")
+                st.number_input("A3 原価 (円)", value=get_num(s, 'ac_a3_cost'), key=gk("ac_a3_cost"))
+                st.number_input("A3 加工時間 (秒)", value=get_num(s, 'ac_a3_sec'), key=gk("ac_a3_sec"))
+                st.number_input("A3 機械代 (円)", value=get_num(s, 'ac_a3_mac'), key=gk("ac_a3_mac"))
             with c2:
                 st.markdown("##### MDF")
-                st.number_input("A4 原価 (円)", value=get_num(s, 'mdf_a4_cost'), key="mdf_a4_cost")
-                st.number_input("A4 加工時間 (秒)", value=get_num(s, 'mdf_a4_sec'), key="mdf_a4_sec")
-                st.number_input("A4 機械代 (円)", value=get_num(s, 'mdf_a4_mac'), key="mdf_a4_mac")
+                st.number_input("A4 原価 (円)", value=get_num(s, 'mdf_a4_cost'), key=gk("mdf_a4_cost"))
+                st.number_input("A4 加工時間 (秒)", value=get_num(s, 'mdf_a4_sec'), key=gk("mdf_a4_sec"))
+                st.number_input("A4 機械代 (円)", value=get_num(s, 'mdf_a4_mac'), key=gk("mdf_a4_mac"))
                 st.divider()
-                st.number_input("A3 原価 (円)", value=get_num(s, 'mdf_a3_cost'), key="mdf_a3_cost")
-                st.number_input("A3 加工時間 (秒)", value=get_num(s, 'mdf_a3_sec'), key="mdf_a3_sec")
-                st.number_input("A3 機械代 (円)", value=get_num(s, 'mdf_a3_mac'), key="mdf_a3_mac")
+                st.number_input("A3 原価 (円)", value=get_num(s, 'mdf_a3_cost'), key=gk("mdf_a3_cost"))
+                st.number_input("A3 加工時間 (秒)", value=get_num(s, 'mdf_a3_sec'), key=gk("mdf_a3_sec"))
+                st.number_input("A3 機械代 (円)", value=get_num(s, 'mdf_a3_mac'), key=gk("mdf_a3_mac"))
 
         with tab2:
             c1, c2 = st.columns(2)
             with c1:
                 st.markdown("##### 基本インク代（A4換算）")
-                for i in range(1, 6): st.number_input(f"レベル{i}", value=get_num(s, f'ink_{i}'), key=f"ink_{i}")
+                for i in range(1, 6): st.number_input(f"レベル{i}", value=get_num(s, f'ink_{i}'), key=gk(f"ink_{i}"))
             with c2:
                 st.markdown("##### 追加インク (1回あたり)")
-                st.number_input("マット 追加原価 (円)", value=get_num(s, 'ink_mat_cost'), key="ink_mat_cost")
-                st.number_input("マット 追加時間 (秒)", value=get_num(s, 'ink_mat_sec'), key="ink_mat_sec")
-                st.number_input("透明 追加原価 (円)", value=get_num(s, 'ink_clr_cost'), key="ink_clr_cost")
-                st.number_input("透明 追加時間 (秒)", value=get_num(s, 'ink_clr_sec'), key="ink_clr_sec")
-                st.number_input("白版 追加原価 (円)", value=get_num(s, 'ink_wht_cost'), key="ink_wht_cost")
-                st.number_input("白版 追加時間 (秒)", value=get_num(s, 'ink_wht_sec'), key="ink_wht_sec")
+                st.number_input("マット 追加原価 (円)", value=get_num(s, 'ink_mat_cost'), key=gk("ink_mat_cost"))
+                st.number_input("マット 追加時間 (秒)", value=get_num(s, 'ink_mat_sec'), key=gk("ink_mat_sec"))
+                st.number_input("透明 追加原価 (円)", value=get_num(s, 'ink_clr_cost'), key=gk("ink_clr_cost"))
+                st.number_input("透明 追加時間 (秒)", value=get_num(s, 'ink_clr_sec'), key=gk("ink_clr_sec"))
+                st.number_input("白版 追加原価 (円)", value=get_num(s, 'ink_wht_cost'), key=gk("ink_wht_cost"))
+                st.number_input("白版 追加時間 (秒)", value=get_num(s, 'ink_wht_sec'), key=gk("ink_wht_sec"))
 
         with tab3:
             for i in range(1, 11):
                 pc1, pc2, pc3 = st.columns([2, 1, 1])
-                pc1.text_input(f"項目名 {i}", value=s.get(f'pack_{i}_name', ''), key=f"pack_{i}_name")
-                pc2.number_input(f"コスト(円) {i}", value=get_num(s, f'pack_{i}_cost'), key=f"pack_{i}_cost")
-                pc3.number_input(f"時間(秒) {i}", value=get_num(s, f'pack_{i}_sec'), key=f"pack_{i}_sec")
+                pc1.text_input(f"項目名 {i}", value=s.get(f'pack_{i}_name', ''), key=gk(f"pack_{i}_name"))
+                pc2.number_input(f"コスト(円) {i}", value=get_num(s, f'pack_{i}_cost'), key=gk(f"pack_{i}_cost"))
+                pc3.number_input(f"時間(秒) {i}", value=get_num(s, f'pack_{i}_sec'), key=gk(f"pack_{i}_sec"))
 
         with tab4:
             c1, c2 = st.columns(2)
             with c1:
                 st.markdown("##### 利益率設定 (%)")
-                for i in range(1, 4): st.number_input(f"利益率 {i}", value=get_num(s, f'profit_{i}'), key=f"profit_{i}")
+                for i in range(1, 4): st.number_input(f"利益率 {i}", value=get_num(s, f'profit_{i}'), key=gk(f"profit_{i}"))
             with c2:
                 st.markdown("##### ロスト率設定 (%)")
-                for i in range(1, 4): st.number_input(f"ロスト率 {i}", value=get_num(s, f'loss_{i}'), key=f"loss_{i}")
+                for i in range(1, 4): st.number_input(f"ロスト率 {i}", value=get_num(s, f'loss_{i}'), key=gk(f"loss_{i}"))
 
         if st.form_submit_button(f"パターン {pattern_id} に設定を保存"):
+            suffix = f"_p{pattern_id}"
             for key in st.session_state.keys():
-                if key != f"FormSubmitter:settings_form-パターン {pattern_id} に設定を保存" and not key.startswith("FormSubmitter"):
-                    db.update_setting(pattern_id, key, st.session_state[key])
+                # サフィックス（_p1 など）がついているものだけを抽出し、元の名前に戻して保存する
+                if key.endswith(suffix):
+                    item_key = key[:-len(suffix)]
+                    db.update_setting(pattern_id, item_key, st.session_state[key])
             st.success("保存しました！")
 
 elif page == "データ出力（原価計算）":
@@ -104,7 +111,8 @@ elif page == "データ出力（原価計算）":
             st.subheader(f"Order {idx+1}")
             c1, c2 = st.columns([1, 2])
             with c1:
-                qty = st.number_input("製造予定個数", min_value=0, value=100, key=f"qty_{idx}")
+                # 💡修正ポイント2: 予定個数のデフォルトを 0 に変更しました
+                qty = st.number_input("製造予定個数", min_value=0, value=0, key=f"qty_{idx}")
                 tori = st.number_input("1シート丁付け数", min_value=1, value=15, key=f"tori_{idx}")
                 mat_size = st.selectbox("素材・サイズ", ["アクリル A4", "アクリル A3", "MDF A4", "MDF A3"], key=f"mat_{idx}")
                 ms_key = "ac_a4" if mat_size == "アクリル A4" else "ac_a3" if mat_size == "アクリル A3" else "mdf_a4" if mat_size == "MDF A4" else "mdf_a3"
@@ -168,7 +176,7 @@ elif page == "データまとめ":
     valid_data = [d for d in st.session_state.calc_results if d]
     
     if not valid_data:
-        st.warning("データ出力ページで数量を入力してください。")
+        st.warning("データ出力ページで数量を入力してください（数量0のOrderは表示・出力されません）。")
     else:
         df = pd.DataFrame(valid_data)
         total_qty = df["予定個数"].sum()
@@ -258,6 +266,9 @@ elif page == "データまとめ":
     st.divider()
     if st.button("🗑️ 全シートの入力データをクリア"):
         st.session_state.calc_results = [{} for _ in range(10)]
+        # 💡修正ポイント3: クリアボタンを押した際、数量ウィジェットのキャッシュも0に完全リセットします
+        for i in range(10):
+            st.session_state[f"qty_{i}"] = 0
         st.success("クリアしました！")
         st.rerun()
 
