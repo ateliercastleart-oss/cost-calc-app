@@ -1,4 +1,3 @@
-# db.py の最新版
 import sqlite3
 import pandas as pd
 
@@ -7,6 +6,13 @@ DB_NAME = 'cost.db'
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
+    
+    # --- 追加：古い形式のテーブルが残っていたら強制削除する ---
+    c.execute('DROP TABLE IF EXISTS settings')
+    c.execute('DROP TABLE IF EXISTS history')
+    # --------------------------------------------------------
+    
+    # 新しい形式でテーブルを作り直す
     c.execute('''
         CREATE TABLE IF NOT EXISTS settings (
             pattern_id INTEGER,
