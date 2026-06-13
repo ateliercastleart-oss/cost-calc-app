@@ -190,15 +190,15 @@ elif page == "データまとめ":
         df_csv.set_index("Order", inplace=True)
         df_t = df_csv.T # 転置（行と列の入れ替え）
         
-        # 「総合計」の列を先頭に追加
+        # エラー修正：数値を文字（文字列）に変換してから代入する
         df_t.insert(0, "総合計 (Grand Total)", "")
-        df_t.at["予定個数", "総合計 (Grand Total)"] = total_qty
-        df_t.at["必要シート数", "総合計 (Grand Total)"] = df["必要シート数"].sum()
+        df_t.at["予定個数", "総合計 (Grand Total)"] = str(int(total_qty))
+        df_t.at["必要シート数", "総合計 (Grand Total)"] = str(int(df["必要シート数"].sum()))
         df_t.at["1個原価", "総合計 (Grand Total)"] = "-"
         df_t.at["1個売価", "総合計 (Grand Total)"] = "-"
-        df_t.at["総原価", "総合計 (Grand Total)"] = total_cost
-        df_t.at["総売上", "総合計 (Grand Total)"] = total_sale
-        df_t.at["総利益", "総合計 (Grand Total)"] = total_profit
+        df_t.at["総原価", "総合計 (Grand Total)"] = str(int(total_cost))
+        df_t.at["総売上", "総合計 (Grand Total)"] = str(int(total_sale))
+        df_t.at["総利益", "総合計 (Grand Total)"] = str(int(total_profit))
         df_t.at["総時間", "総合計 (Grand Total)"] = format_time(total_sec)
 
         df_t.reset_index(inplace=True)
